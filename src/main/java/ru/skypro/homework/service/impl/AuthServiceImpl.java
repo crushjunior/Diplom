@@ -1,47 +1,45 @@
 package ru.skypro.homework.service.impl;
 
-import org.springframework.security.core.userdetails.User;
+import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.provisioning.UserDetailsManager;
 import org.springframework.stereotype.Service;
 import ru.skypro.homework.dto.RegisterReq;
 import ru.skypro.homework.dto.Role;
+import ru.skypro.homework.entity.UserEntity;
+import ru.skypro.homework.mapper.UserMapper;
+import ru.skypro.homework.repository.UserRepository;
+import ru.skypro.homework.security.MyUserDetailsService;
 import ru.skypro.homework.service.AuthService;
 
 @Service
+@RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
 
-  private final UserDetailsManager manager;
+  private final MyUserDetailsService manager;
 
   private final PasswordEncoder encoder;
 
-  public AuthServiceImpl(UserDetailsManager manager, PasswordEncoder passwordEncoder) {
-    this.manager = manager;
-    this.encoder = passwordEncoder;
-  }
+  private final UserRepository userRepository;
+
+  private final UserMapper userMapper;
+
 
   @Override
   public boolean login(String userName, String password) {
-    if (!manager.userExists(userName)) { // если пользователя с таким именем нет, то фолс
-      return false;
-    }
-    UserDetails userDetails = manager.loadUserByUsername(userName); // иноформация о пользователе
-    return encoder.matches(password, userDetails.getPassword()); // проверка совпадения паролей
+    UserDetails userDetails = manager.loadUserByUsername(userName);
+    return encoder.matches(password, userDetails.getPassword());
   }
 
   @Override
   public boolean register(RegisterReq registerReq, Role role) {
-    if (manager.userExists(registerReq.getUsername())) { // если пользователь уже есть, то фолс
+    if (userRepository.findByEmailIgnoreCase(registerReq.getUsername()).isPresent()) {
       return false;
     }
-    manager.createUser(
-        User.builder()
-            .passwordEncoder(this.encoder::encode)
-            .password(registerReq.getPassword())
-            .username(registerReq.getUsername())
-            .roles(role.name())
-            .build()); // создается новый пользователь
+    UserEntity userEntity = userMapper.toEntityFromReq(registerReq);
+    userEntity.setRole(role);
+    userEntity.setPassword(encoder.encode(userEntity.getPassword()));
+    userRepository.save(userEntity);
     return true;
   }
 }

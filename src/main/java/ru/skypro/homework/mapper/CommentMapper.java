@@ -33,7 +33,7 @@ public interface CommentMapper {
         if (time == null) {
             return 0L;
         }
-        return time.toInstant(ZoneOffset.UTC).toEpochMilli();
+        return time.toInstant(ZoneOffset.ofHours(3)).toEpochMilli();
     }
 
     default String image(CommentEntity commentEntity) {

@@ -4,7 +4,6 @@ import org.springframework.security.core.Authentication;
 import ru.skypro.homework.dto.Comment;
 import ru.skypro.homework.dto.CreateComment;
 import ru.skypro.homework.dto.ResponseWrapperComment;
-import ru.skypro.homework.entity.AdsEntity;
 
 
 public interface CommentService {

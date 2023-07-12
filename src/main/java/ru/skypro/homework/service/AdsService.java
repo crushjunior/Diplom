@@ -7,6 +7,7 @@ import ru.skypro.homework.dto.Ads;
 import ru.skypro.homework.dto.CreateAds;
 import ru.skypro.homework.dto.FullAds;
 
+import java.io.IOException;
 import java.util.Collection;
 
 public interface AdsService {
@@ -16,5 +17,6 @@ public interface AdsService {
     void deleteAds(Integer adsId);
     Ads updateAds(CreateAds createAds, Integer adsId);
     Collection<Ads> getAdsMe(Authentication authentication);
-    String updateImage(Integer adsId, MultipartFile image);
+    String updateImage(Integer adsId, MultipartFile image) throws IOException;
+    byte[] getAdImage(Integer adsId);
 }

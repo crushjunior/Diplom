@@ -1,7 +1,6 @@
 package ru.skypro.homework.service.impl;
 
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.core.Authentication;
@@ -11,31 +10,36 @@ import org.springframework.web.multipart.MultipartFile;
 import ru.skypro.homework.dto.Ads;
 import ru.skypro.homework.dto.CreateAds;
 import ru.skypro.homework.dto.FullAds;
+import ru.skypro.homework.dto.Role;
 import ru.skypro.homework.entity.AdsEntity;
 import ru.skypro.homework.entity.ImageEntity;
 import ru.skypro.homework.entity.UserEntity;
+import ru.skypro.homework.exception.AccessException;
+import ru.skypro.homework.exception.ObjectAbsenceException;
 import ru.skypro.homework.mapper.AdsMapper;
 import ru.skypro.homework.repository.AdsRepository;
+import ru.skypro.homework.repository.CommentRepository;
 import ru.skypro.homework.repository.UserRepository;
+import ru.skypro.homework.security.MyUserDetails;
 import ru.skypro.homework.service.AdsService;
 import ru.skypro.homework.service.ImageService;
 import ru.skypro.homework.service.UserService;
 
 import java.io.IOException;
 import java.util.Collection;
-import java.util.Optional;
+
 
 /**
  * Сервис AdsServiceImpl
  * Сервис для добавления, удаления, редактирования и поиска объявлений в базе данных
  */
-@Slf4j
+
 @Service
 @RequiredArgsConstructor
 @Transactional
 public class AdsServiceImpl implements AdsService {
 
-    private static final Logger logger = LoggerFactory.getLogger(Ads.class);
+    private static final Logger logger = LoggerFactory.getLogger(AdsServiceImpl.class);
 
     /**
      * Поле репозитория объявлении
@@ -58,25 +62,9 @@ public class AdsServiceImpl implements AdsService {
     private final UserService userService;
     private final ImageService imageService;
 
+    private final MyUserDetails userDetails;
 
-    /**
-     * Конструктор - создание нового объекта репозитория
-     *
-     * @param adsRepository  репозиторий объявления
-     * @param adsMapper
-     * @param userRepository репозиторий пользователя
-     * @param userService    сервис пользователя
-     * @param userMapper
-     * @param imageService
-     * @see AdsRepository(AdsRepository)
-     */
-//    public AdsServiceImpl(AdsRepository adsRepository, AdsMapper adsMapper, UserRepository userRepository, UserService userService, UserMapper userMapper, ImageService imageService) {
-//        this.adsRepository = adsRepository;
-//        this.adsMapper = adsMapper;
-//        this.userRepository = userRepository;
-//        this.userService = userService;
-//        this.imageService = imageService;
-//    }
+    private final CommentRepository commentRepository;
 
     /**
      * Получение списка всех объявлений из базы данных
@@ -110,7 +98,7 @@ public class AdsServiceImpl implements AdsService {
         logger.info("Вызван метод добавления объявления");
 
         AdsEntity adsEntity = adsMapper.toEntity(createAds);
-        UserEntity author = userRepository.findByEmailIgnoreCase(authentication.getName()).orElseThrow(RuntimeException::new); //TODO сделать свое исключение
+        UserEntity author = userRepository.findByEmailIgnoreCase(authentication.getName()).orElseThrow(RuntimeException::new);
         adsEntity.setAuthor(author);
 
         ImageEntity adImage;
@@ -146,7 +134,18 @@ public class AdsServiceImpl implements AdsService {
     @Override
     public void deleteAds(Integer adsId) {
         logger.info("Вызван метод удаления объявления по идентификатору (id)");
-        adsRepository.deleteById(adsId);
+        AdsEntity deleteAd = adsRepository.findById(adsId).orElseThrow(RuntimeException::new);
+        if (isOwner(deleteAd, userDetails)) {
+            commentRepository.deleteCommentEntitiesByAd_Id(adsId);
+            imageService.deleteImage(deleteAd.getImageEntity().getId());
+            adsRepository.deleteById(adsId);
+        } else {
+            try {
+                throw new AccessException("Вы не можете удалять чужие объявления");
+            } catch (AccessException e) {
+                e.getMessage();
+            }
+        }
     }
 
     /**
@@ -159,21 +158,39 @@ public class AdsServiceImpl implements AdsService {
     @Override
     public Ads updateAds(CreateAds createAds, Integer adsId) {
         if (adsId == null) {
-            throw new RuntimeException("Такого объявления не существует!");
+            try {
+                throw new ObjectAbsenceException("Такого объявления не существует!");
+            } catch (ObjectAbsenceException e) {
+                e.getMessage();
+            }
         }
 
         if (createAds.getPrice() < 0) {
-            throw new RuntimeException("Цена должна быть больше 0!");
+            try {
+                throw new RuntimeException("Цена должна быть больше 0!");
+            } catch (RuntimeException e) {
+                e.getMessage();
+            }
+
         }
 
         AdsEntity updateAd = adsRepository.findById(adsId).orElseThrow(RuntimeException::new);
-        updateAd.setTitle(createAds.getTitle());
-        updateAd.setPrice(createAds.getPrice());
-        updateAd.setDescription(createAds.getDescription());
+        if (isOwner(updateAd, userDetails)) {
+            updateAd.setTitle(createAds.getTitle());
+            updateAd.setPrice(createAds.getPrice());
+            updateAd.setDescription(createAds.getDescription());
 
-        adsRepository.save(updateAd);
+            adsRepository.save(updateAd);
 
-        return adsMapper.toAdsDto(updateAd);
+            return adsMapper.toAdsDto(updateAd);
+        } else {
+            try {
+                throw new AccessException("Вы не можете изменять чужие объявления");
+            } catch (AccessException e) {
+                e.getMessage();
+            }
+            return null;
+        }
     }
 
     /**
@@ -197,25 +214,36 @@ public class AdsServiceImpl implements AdsService {
      * @return объявление с новой картинкой
      */
     @Override
-    public String updateImage(Integer adsId, MultipartFile image) {
+    public String updateImage(Integer adsId, MultipartFile image) throws IOException{
         logger.info("Вызван метод обновления картинки объявления");
-        if (adsId == null) {
-            throw new RuntimeException("Такого объявления не существует!");
+        AdsEntity updateAd = adsRepository.findById(adsId).orElseThrow(RuntimeException::new);
+        if (isOwner(updateAd, userDetails)) {
+            Integer idDeleteImage = updateAd.getImageEntity().getId();
+            updateAd.setImageEntity(imageService.downloadImage(image));
+            imageService.deleteImage(idDeleteImage);
+            adsRepository.save(updateAd);
+            return adsMapper.toAdsDto(updateAd).getImage();
+        } else {
+            try {
+                throw new AccessException("Вы не можете изменить автар этого профиля");
+            } catch (AccessException e) {
+                e.getMessage();
+            }
+            return null;
         }
+    }
 
-        ImageEntity adImage;
-        try {
-            adImage = imageService.downloadImage(image);
-        } catch (IOException e) {
-            throw new RuntimeException("Ошибка при загрузке фото");
+    @Override
+    public byte[] getAdImage(Integer adsId) {
+        logger.info("Get image of an AD with a ID: " + adsId);
+        return imageService.getImage(adsRepository.findById(adsId).orElseThrow(RuntimeException::new).getImageEntity().getId());
+    }
+
+    private boolean isOwner(AdsEntity ad, MyUserDetails details) {
+        boolean isOwner = false;
+        if (ad.getAuthor().getEmail().equals(details.getUserSecurity().getEmail()) || details.getUserSecurity().getRole() == Role.ADMIN) {
+            isOwner = true;
         }
-
-        int imageId = adImage.getId();
-        imageService.deleteImage(imageId);
-
-        AdsEntity ad = adsRepository.findById(adsId).orElseThrow(RuntimeException::new);
-        ad.setImageEntity(adImage);
-        adsRepository.save(ad);
-        return adsMapper.toAdsDto(ad).getImage();
+        return isOwner;
     }
 }

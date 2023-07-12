@@ -68,7 +68,7 @@ public class CommentController {
     /**
      * Добавить комментарий к объявлению
      *
-     * @param adsId            Id объявление, не может быть null
+     * @param id           Id объявление, не может быть null
      * @param createComment  данные комментария
      * @param authentication авторизованный пользователь
      * @return возвращает объект, содержащий данные созданного комментария
@@ -145,7 +145,7 @@ public class CommentController {
      * Удалить комментарий
      *
      * @param commentId      идентификатор комментария, не может быть null
-     * @param adsId          идентификатор объявления, не может быть null
+     * @param adId          идентификатор объявления, не может быть null
      */
     @Operation(
             summary = "Удалить комментарий",

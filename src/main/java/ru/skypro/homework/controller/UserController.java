@@ -171,4 +171,10 @@ public class UserController {
         userService.updateUserImage(image, authentication);
         return ResponseEntity.ok().build();
     }
+
+    @GetMapping(value = "/{id}/image", produces = MediaType.IMAGE_PNG_VALUE)
+    public ResponseEntity<byte[]> getImage(@PathVariable Integer id) throws IOException {
+        log.info("Get user image with id" + id);
+        return ResponseEntity.ok(userService.getUserImage(id));
+    }
 }

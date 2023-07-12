@@ -34,6 +34,6 @@ public class ImageServiceImpl implements ImageService {
     @Override
     public byte[] getImage(Integer id) {
         Optional<ImageEntity> imageEntity = imageRepository.findById(id);
-        return imageEntity.orElseThrow().getData(); // TODO сделать свое исключение
+        return imageEntity.orElseThrow().getData();
     }
 }
